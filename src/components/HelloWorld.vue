@@ -64,6 +64,20 @@
             ></b-form-input>
           </b-col>
         </b-row>
+
+        <b-table striped hover :items="vortex">
+          <template #cell(acciones)="data">
+            <b-button @click="deleteWeight(data.item)" variant="danger"
+              >Eliminar</b-button
+            >
+          </template>
+        </b-table>
+
+        <b-row>
+          <b-button class="ml-3 mt-3" @click="addPath" variant="primary"
+            >Adicionar camino</b-button
+          >
+        </b-row>
       </b-container>
     </b-modal>
 
@@ -118,6 +132,13 @@
 
       <div class="d-flex flex-wrap justify-content-center">
         <b-table striped hover :items="items">
+          <template #cell(start)="data">
+            {{ data.start }}
+          </template>
+          <template #cell(distances)="data">
+            {{ data.distances }}
+          </template>
+
           <template #cell(acciones)="data">
             <b-button @click="deleteWeight(data.item)" variant="danger"
               >Eliminar</b-button
@@ -126,7 +147,7 @@
         </b-table>
       </div>
 
-      <b-row v-if="weights.length > 1" class="mt-2">
+      <b-row class="mt-2">
         <b-container>
           <b-row>
             <b-col cols="6">
@@ -137,6 +158,7 @@
               ></b-form-select>
             </b-col>
           </b-row>
+
           <b-row>
             <b-col cols="6">
               <label for="destinationNode">Hasta:</label>
@@ -149,7 +171,6 @@
             </b-col>
           </b-row>
           <b-button
-            :disabled="!this.targetOrigin || !this.targetDestination"
             class="mb-5 mt-4"
             @click="submitData"
             size="lg"
@@ -158,18 +179,18 @@
           >
         </b-container>
       </b-row>
-      <b-row v-else-if="weights.length === 0">
+      <!-- <b-row v-else-if="weights.length === 0">
         <h3>Ingresa peso en el grafo para poder calcular!</h3>
       </b-row>
       <b-row v-else>
         <h3>Ingresa mas de 1 peso en el grafo para poder calcular!</h3>
-      </b-row>
+      </b-row> -->
     </div>
   </div>
 </template>
 
 <script>
-import { WeightedGraph } from '../../src/helpers/dijkstra';
+import { Graph } from '../../src/helpers/shortestPath';
 export default {
   name: 'HelloWorld',
   components: {},
@@ -180,7 +201,7 @@ export default {
       addVortixModal: false,
       addWeightModal: false,
       nodeName: null,
-      nodes: [],
+      nodes: ['A', 'B', 'C'],
       originNode: null,
       destinationNode: null,
       originValue: null,
@@ -191,10 +212,22 @@ export default {
       targetDestination: null,
       result: [],
       showResult: false,
-      ammount: 0
+      ammount: 0,
+      vortex: []
     };
   },
   methods: {
+    addPath() {
+      this.vortex.push({
+        start: this.originNode,
+        distances: [
+          {
+            to: this.destinationNode,
+            value: this.weight
+          }
+        ]
+      });
+    },
     addNode() {
       this.nodes.push(this.nodeName);
       this.nodeName = null;
@@ -203,28 +236,39 @@ export default {
       this.nodes = this.nodes.filter(item => item !== index);
     },
     addWeight() {
-      if (
-        this.weights.filter(
-          item =>
-            item.destination === this.destinationNode &&
-            item.origin === this.originNode
-        ).length > 0
-      ) {
-        this.showError = true;
-        this.originNode = null;
-        this.destinationNode = null;
-        this.weight = null;
-      } else {
-        this.weights.push({
-          origin: this.originNode,
-          destination: this.destinationNode,
-          weight: this.weight
-        });
-        this.showError = false;
-        this.originNode = null;
-        this.destinationNode = null;
-        this.weight = null;
+      let s = '';
+      let d = [];
+      for (let index = 0; index < this.vortex.length; index++) {
+        const vortex = this.vortex[index];
+        s = vortex.start;
+
+        for (let index = 0; index < vortex.distances.length; index++) {
+          const distances = vortex.distances[index];
+
+          d.push(distances);
+        }
       }
+      console.log(d);
+      let newObject = {};
+      d.forEach(o => {
+        newObject[o.to] = o.value;
+      });
+
+      this.weights.push({
+        start: s,
+        distances: newObject
+      });
+
+      this.vortex = [];
+    },
+    convertArrayToObject(array, key) {
+      const initialValue = {};
+      return array.reduce((obj, item) => {
+        return {
+          ...obj,
+          [item[key]]: item
+        };
+      }, initialValue);
     },
     deleteWeight(data) {
       let indexFound = 0;
@@ -240,14 +284,29 @@ export default {
       this.weights.splice(indexFound, 1);
     },
     submitData() {
-      const graph = new WeightedGraph();
-      this.nodes.forEach(node => {
-        graph.addVertex(node);
+      console.log('submiting data');
+      const graph = new Graph();
+      this.weights.forEach(w => {
+        graph.addVertex(w.start, w.distances);
       });
-      this.weights.forEach(weight => {
-        graph.addEdge(weight.origin, weight.destination, weight.weight);
-      });
-      this.result = graph.Dijkstra(this.targetOrigin, this.targetDestination);
+      console.log(graph);
+      console.log(
+        graph
+          .shortestPath(this.targetOrigin, this.targetDestination)
+          .concat([this.targetOrigin])
+          .reverse()
+      );
+      // const graph = new WeightedGraph();
+      // this.nodes.forEach(node => {
+      //   graph.addVertex(node);
+      // });
+      // this.weights.forEach(weight => {
+      //   graph.addEdge(weight.origin, weight.destination, weight.weight);
+      // });
+      this.result = graph
+        .shortestPath(this.targetOrigin, this.targetDestination)
+        .concat([this.targetOrigin])
+        .reverse();
       this.showResult = true;
     }
   },
@@ -255,8 +314,8 @@ export default {
     items() {
       return this.weights.map(weight => {
         return {
-          origen: weight.origin,
-          destino: weight.destination,
+          origen: weight.start,
+          destinos: weight.destinations,
           peso: weight.weight,
           acciones: ''
         };
